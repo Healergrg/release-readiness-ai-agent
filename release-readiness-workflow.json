@@ -1,0 +1,826 @@
+{
+  "name": "Release Readiness Multi-Agent System",
+  "nodes": [
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $workflow.id }}-supervisor",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -704,
+        400
+      ],
+      "id": "e7198981-6434-4627-bdf1-22dc8c50cb87",
+      "name": "Supervisor Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "You are the Supervisor Agent for a Software Release Readiness Multi-Agent System built for NextWave Software. You do not review\ntest results, defects, or write the release report yourself. Your job is only to coordinate the other agents and keep the process in this\nexact order: 1) The Change & QA Evidence Agent reviews the change/feature dataset against the QA test results. 2) The Defect & Risk\nAgent reviews open defects, their severity, business impact, and available workarounds. 3) Once both are complete, the Compliance &\nRecommendation Agent applies NextWave's release rules to that evidence and proposes a Ready / Conditional / Not Ready\nrecommendation. 4) The Report Generation Agent turns that recommendation and its supporting evidence into a clear Release\nReadiness Report. 5) The report is sent to the Technical Lead for Human Review. The system's recommendation is advisory only - the\nTechnical Lead makes the final release decision. Do not skip a step, do not perform another agent's task, and do not let the number of\npassed tests alone drive the outcome. If a step reports missing, incomplete, or conflicting information, flag it clearly instead of\nguessing. At each stage, output a short structured status: current stage, what was completed, and what happens next."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -816,
+        176
+      ],
+      "id": "b924ea7f-bca3-4db1-b49e-cdce1705869a",
+      "name": "Supervisor Agent"
+    },
+    {
+      "parameters": {
+        "options": {
+          "allowFileUploads": true,
+          "allowedFilesMimeTypes": "application/pdf"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -2176,
+        176
+      ],
+      "id": "cc19feb6-c5ad-466f-9113-d24ee387d6c0",
+      "name": "When chat message received"
+    },
+    {
+      "parameters": {
+        "jsCode": "const extracted = $('Data Extraction Agent').item.json.output;\nconst rules = {\n  recommendation_levels: {\n    Ready: \"No major issue prevents release and remaining risks are acceptable\",\n    Conditional: \"Release may proceed only after specific actions, approvals, or risk acceptance\",\n    \"Not Ready\": \"Important issues must be resolved before release\"\n  },\n  defect_severity_rules: {\n    Critical: \"Release should not proceed until the defect is resolved\",\n    High: \"Release normally should not proceed unless there is formal approval and a strong business reason\",\n    Medium: \"Release may proceed if business impact is understood, a workaround exists where needed, and the risk is accepted\",\n    Low: \"Release may normally proceed if the issue is documented\"\n  },\n  qa_rules: {\n    critical_fail: \"Release is Not Ready\",\n    high_priority_fail: \"Release requires investigation before approval\",\n    medium_priority_fail: \"Assess business impact and available workaround\",\n    low_priority_fail: \"Document the issue and assess whether it can be accepted\",\n    regression_fail: \"Review carefully because existing functionality may be affected\",\n    security_fail: \"Release should not proceed until the issue is reviewed and resolved\"\n  },\n  approval_rules: [\n    \"The AI system may assess release readiness but cannot approve a production release.\",\n    \"The Technical Lead must make the final release decision.\",\n    \"Any unresolved Critical or High-severity defect must be clearly highlighted.\",\n    \"Medium-severity defects must include their business impact and any available workaround.\",\n    \"Known issues accepted for release must be included in the final release report.\",\n    \"The system must not hide or minimize failed tests simply because most tests passed.\",\n    \"If release information is incomplete, conflicting, or uncertain, the system should clearly identify the uncertainty and request human review.\"\n  ]\n};\n\nreturn [{\n  json: {\n    release_overview: extracted.release_overview,\n    changes: extracted.changes,\n    qa_results: extracted.qa_results,\n    defects: extracted.defects,\n    release_rules: rules\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        176
+      ],
+      "id": "e817242a-dc7a-4956-949f-c9ef9e94489e",
+      "name": "Release Data"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"changes_reviewed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"test_coverage\":{\"type\":\"string\",\"enum\":[\"Covered - Passed\",\"Covered - Has Failures\",\"No Direct Coverage\"]},\"related_test_ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"failed_tests\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\"},\"notes\":{\"type\":\"string\"}}}},\"regression_results\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"security_results\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"coverage_gaps\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"changes_reviewed\",\"failed_tests\",\"regression_results\",\"security_results\",\"coverage_gaps\"]}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -256,
+        400
+      ],
+      "id": "ec44ea51-e421-4677-ae58-abb06b7d7213",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"defects_reviewed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"severity\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"business_impact\":{\"type\":\"string\"},\"workaround_available\":{\"type\":\"boolean\"},\"workaround\":{\"type\":\"string\"},\"rule_guidance\":{\"type\":\"string\"},\"flag_for_review\":{\"type\":\"boolean\"}}}}},\"required\":[\"defects_reviewed\"]}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        432
+      ],
+      "id": "e2fdc278-18a7-41bf-ab85-8eed5af2aeb3",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Open Defects: {{ JSON.stringify($('Release Data').item.json.defects) }} Defect Severity Rules: {{ JSON.stringify($('Release Data').item.json.release_rules.defect_severity_rules) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You will receive NextWave's list of open defects and the company's Defect Severity Rules. Your job: For every open defect, restate its\narea, severity, description, business impact, and whether a workaround is available (and what it is). Apply the Defect Severity Rules\nliterally: state what the rule says should happen for a defect of that exact severity (Critical, High, Medium, or Low). Never assume a\ndefect is acceptable for release just because a workaround exists - a workaround reduces impact, it does not cancel the severity rule.\nDo not invent defects, severities, or impacts that are not in the provided data. If a defect's severity or business impact is missing or\nunclear, set flag_\nfor\n_\nreview to true instead of guessing a value. Output structured JSON only, in the schema provided."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -16,
+        32
+      ],
+      "id": "ca0a066e-971b-4022-9ab3-165fa9219d56",
+      "name": "Defect & Risk Agent"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        352,
+        160
+      ],
+      "id": "1db352d8-64f2-40c8-a452-3d8187a7de7a",
+      "name": "Combine"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Change & QA Evidence: {{ JSON.stringify($('Change & QA Evidence Agent').item.json.output) }} Defect & Risk Evidence: {{ JSON.stringify($('Defect & Risk Agent').item.json.output) }} QA Rules: {{ JSON.stringify($('Release Data').item.json.release_rules.qa_rules) }} Approval Rules: {{ JSON.stringify($('Release Data').item.json.release_rules.approval_rules) }} /no-think",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You will receive the Change & QA Evidence Agent's output, the Defect & Risk Agent's output, and NextWave's QA Rules and Release Approval Rules. Weigh the evidence against the rules and produce one of three recommendations: Ready, Conditional, or Not Ready. Apply these principles exactly: Any unresolved Critical or High-severity defect must be clearly highlighted, and normally blocks a \"Ready\" recommendation unless there is a documented approval and a strong business reason - which you cannot grant yourself. A failed Critical test means Not Ready. A failed High-priority test requires investigation before approval. A failed Medium-priority test needs its business impact and workaround assessed. A failed Low-priority test should be documented and may be accepted. A failed Regression test must be reviewed carefully. A failed Security test blocks release until it is reviewed and resolved. Medium-severity defects must always be reported with their business impact and workaround - never silently accepted. Never recommend Ready purely because most tests passed. One serious issue can outweigh many passing tests. If evidence is incomplete, conflicting, or uncertain, do not force a confident recommendation - say clearly what is uncertain and mark it as needing human review. Always state explicitly that this is a recommendation only, and the Technical Lead makes the final release decision. Output structured JSON only, in the schema provided. /no_think"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        576,
+        160
+      ],
+      "id": "2bb75393-5e04-453b-a36d-45039c3acfcd",
+      "name": "Compliance & Recommendation Agent"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"recommendation\":{\"type\":\"string\",\"enum\":[\"Ready\",\"Conditional\",\"Not Ready\"]},\"summary\":{\"type\":\"string\"},\"key_risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"required_actions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"items_needing_human_review\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"recommendation\",\"summary\",\"key_risks\",\"required_actions\",\"items_needing_human_review\"]}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        400
+      ],
+      "id": "7b60ba63-60e7-4e5d-afad-4a52e3601640",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Release Overview: {{ JSON.stringify($('Release Data').item.json.release_overview) }} Change & QA Evidence: {{ JSON.stringify($('Change & QA Evidence Agent').item.json.output) }} Defect & Risk Evidence: {{ JSON.stringify($('Defect & Risk Agent').item.json.output) }} Compliance Recommendation: {{ JSON.stringify($('Compliance & Recommendation Agent').item.json.output) }}",
+        "options": {
+          "systemMessage": "Using the Release Overview and the outputs of the Change & QA Evidence Agent, the Defect & Risk Agent, and the Compliance & Recommendation Agent, write a clear Release Readiness Report for the Technical Lead at NextWave Software. Use plain, professional language a non-technical manager could still follow. Structure the report with these sections, in this order: 1. Release Summary. 2. Completed Changes & Bug Fixes. 3. QA Test Evidence (include every failed test, and Regression/Security results, even if most tests passed). 4. Open Defects & Risk Assessment (business impact and workaround for each). 5. Recommendation (Ready / Conditional / Not Ready) with justification. 6. Required Actions Before Release (if any). 7. Items Needing Technical Lead Review. 8. A closing note stating this recommendation is advisory only - the Technical Lead holds final release authority. Do not invent information beyond what the other agents provided. Output ONLY the report itself as plain Markdown text - do not wrap it in JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        928,
+        160
+      ],
+      "id": "1604cfbe-4cce-4c7e-b6a3-a01c455561ce",
+      "name": "Report Generation Agent"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "technical.lead@example.com",
+        "subject": "=Release Readiness Review — NextWave CRM {{ $('Release Data').item.json.release_overview.release_version }}",
+        "message": "={{ $('Report Generation Agent').item.json.output }}",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Decision",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Approve as Ready "
+                  },
+                  {
+                    "option": " Approve as Conditional "
+                  },
+                  {
+                    "option": "Send Back — Not Ready"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "comment"
+            }
+          ]
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 45,
+              "resumeUnit": "minutes"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        160
+      ],
+      "id": "59ab5de1-7386-4e7b-827a-96b3ad8f7dd0",
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "71366e01-7ec5-4904-8008-123fd544d3e5",
+              "leftValue": "={{ $json.data.Decision }}",
+              "rightValue": "Send Back — Not Ready",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "415824e6-4de1-4417-995f-c93a1cc6ab28",
+              "leftValue": "={{ $json.cycle_count }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        160
+      ],
+      "id": "8caff6e3-2afe-403a-ba14-2f8305ad2123",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "technical.lead@example.com",
+        "subject": "=Release Decision — NextWave CRM {{ $('Release Data').item.json.release_overview.release_version }}: {{ $json.cycle_count >= 3 ? 'FORCED ESCALATION after 3 review cycles' : $json.data.Decision }}",
+        "message": "=={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2448,
+        160
+      ],
+      "id": "c10ee257-328b-4711-8608-121672e87dba",
+      "name": "Final Notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('node'); staticData.cycleCount = 0; return items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        176
+      ],
+      "id": "99278fb7-2344-4512-97d1-3f472e22835b",
+      "name": "Reset Cycle Counter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('node'); if (staticData.cycleCount === undefined) staticData.cycleCount = 0; staticData.cycleCount += 1; return [{ json: { ...items[0].json, cycle_count: staticData.cycleCount } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        160
+      ],
+      "id": "d89b6299-38c0-490e-871d-5cd02dde8e17",
+      "name": "Count Cycles"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Changes: {{ JSON.stringify($('Release Data').item.json.changes) }} QA Test Results: {{ JSON.stringify($('Release Data').item.json.qa_results) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You will receive the Change and Feature Dataset and the QA Test Results as JSON. Your job: For every change, feature, or bug fix, identify which QA tests relate to it by matching the area field, and report whether it has passed tests, failed tests, or no direct test coverage at all. List every failed test with its priority (High/Medium/Low) and which change or area it affects. List Regression and Security test results separately and explicitly, since these carry special weight under NextWave's QA Rules regardless of their pass/fail count. Do not invent test results, and do not assume an untested change is fine - if a change has no related test, say so plainly. Do not decide whether the release should proceed. That decision belongs to the Compliance & Recommendation Agent - your only job is to organize the testing evidence clearly and completely. Output structured JSON only, in the schema provided."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -400,
+        176
+      ],
+      "id": "a86d286e-3145-42ff-a075-13e356d5505f",
+      "name": "Change & QA Evidence Agent"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -1952,
+        176
+      ],
+      "id": "23f70388-b2de-4f03-8467-a1de20664080",
+      "name": "Extract Release PDF"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Data Extraction Agent for NextWave Software's Release Readiness Multi-Agent System. You will receive the raw text extracted from an uploaded release documentation PDF. Your job is to read that text and extract exactly four things, using only what is explicitly written in the document: (1) release_overview - the product name, release version, planned release date, release type, release owner, QA owner, deployment owner, target environment, previous version, release status, and main goal, wherever these are stated; (2) changes - every listed change, feature, or bug fix, each with an id, type, area, title, description, and status; (3) qa_results - every QA test result mentioned, each with an id, area, scenario, result (Passed/Failed), priority, and notes; (4) defects - every open defect mentioned, each with an id, area, severity, description, business impact, whether a workaround is available, the workaround itself, and status. If a field is not stated anywhere in the document, leave it as an empty string, or an empty array for a whole section. Do not infer, estimate, or invent any value that is not explicitly present in the text - this data feeds directly into a release decision, so accuracy matters more than completeness. Output structured JSON only, in the schema provided."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1728,
+        176
+      ],
+      "id": "2517d24c-a2ae-48e3-a0cd-cb0bdc5acbd9",
+      "name": "Data Extraction Agent"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"release_overview\":{\"type\":\"object\",\"properties\":{\"product\":{\"type\":\"string\"},\"release_version\":{\"type\":\"string\"},\"planned_release_date\":{\"type\":\"string\"},\"release_type\":{\"type\":\"string\"},\"release_owner\":{\"type\":\"string\"},\"qa_owner\":{\"type\":\"string\"},\"deployment_owner\":{\"type\":\"string\"},\"target_environment\":{\"type\":\"string\"},\"previous_version\":{\"type\":\"string\"},\"release_status\":{\"type\":\"string\"},\"main_goal\":{\"type\":\"string\"}}},\"changes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"type\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"}}}},\"qa_results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"},\"result\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\"},\"notes\":{\"type\":\"string\"}}}},\"defects\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"area\":{\"type\":\"string\"},\"severity\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"business_impact\":{\"type\":\"string\"},\"workaround_available\":{\"type\":\"boolean\"},\"workaround\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"}}}}},\"required\":[\"release_overview\",\"changes\",\"qa_results\",\"defects\"]}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -1584,
+        416
+      ],
+      "id": "cb057ac8-5aaf-48a4-b788-f9a8cfead6e6",
+      "name": "Data Extraction Output Parser"
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -1728,
+        448
+      ],
+      "id": "f46396c5-5af7-4ca9-816a-b8eadde269a0",
+      "name": "Ollama Chat Model"
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        384
+      ],
+      "id": "448cff0c-5bee-448f-af7c-f769b21f9576",
+      "name": "Ollama Chat Model1"
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        384
+      ],
+      "id": "24d2e312-6d6b-4c29-917a-25c4f317e2b7",
+      "name": "Ollama Chat Model2"
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        400
+      ],
+      "id": "d138604a-4760-46dc-833c-03d578dd083b",
+      "name": "Ollama Chat Model3"
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        944,
+        416
+      ],
+      "id": "35a8b2d1-83a5-48e7-b7b4-fc556007c47f",
+      "name": "Ollama Chat Model5"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        576,
+        400
+      ],
+      "id": "bd64d90b-d869-412a-a6c3-8d9c24f7874f",
+      "name": "OpenRouter Chat Model"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $('Report Generation Agent').item.json.output;\n\nconst isSepRow = (line) => {\n  if (!/^\\s*\\|.*\\|\\s*$/.test(line)) return false;\n  const cells = line.split('|').map(c => c.trim()).filter(c => c.length);\n  return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c));\n};\n\nconst mdToHtml = (t) => {\n  let lines = t.split('\\n');\n  let out = [];\n  let i = 0;\n  while (i < lines.length) {\n    let line = lines[i];\n\n    if (/^\\s*\\|.*\\|\\s*$/.test(line) && lines[i+1] && isSepRow(lines[i+1])) {\n      let headerCells = line.split('|').map(c => c.trim()).filter(c => c.length);\n      let rows = [];\n      i += 2;\n      while (i < lines.length && /^\\s*\\|.*\\|\\s*$/.test(lines[i])) {\n        rows.push(lines[i].split('|').map(c => c.trim()).filter(c => c.length));\n        i++;\n      }\n      let thead = '<tr>' + headerCells.map(h => '<th style=\"border:1px solid #d0d5dd;padding:8px 10px;background:#0b2545;color:#ffffff;text-align:left;font-size:13px;\">' + h + '</th>').join('') + '</tr>';\n      let tbody = rows.map((r, idx) => '<tr style=\"background:' + (idx % 2 ? '#f4f6f8' : '#ffffff') + ';\">' + r.map(c => '<td style=\"border:1px solid #d0d5dd;padding:8px 10px;font-size:13px;\">' + c + '</td>').join('') + '</tr>').join('');\n      out.push('<table style=\"border-collapse:collapse;width:100%;margin:14px 0;\">' + thead + tbody + '</table>');\n      continue;\n    }\n\n    out.push(line);\n    i++;\n  }\n  let h = out.join('\\n');\n  h = h.replace(/^### (.*)$/gm, '<h4 style=\"color:#0b2545;margin:18px 0 6px;\">$1</h4>');\n  h = h.replace(/^## (.*)$/gm, '<h3 style=\"color:#0b2545;border-bottom:2px solid #e2e8f0;padding-bottom:4px;margin:22px 0 8px;\">$1</h3>');\n  h = h.replace(/^# (.*)$/gm, '<h2 style=\"color:#0b2545;margin:24px 0 10px;\">$1</h2>');\n  h = h.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');\n  h = h.replace(/\\*(.*?)\\*/g, '<em>$1</em>');\n  h = h.replace(/^- (.*)$/gm, '<li>$1</li>');\n  h = h.replace(/(<li>.*<\\/li>\\n?)+/g, (m) => '<ul style=\"margin:8px 0;padding-left:22px;\">' + m + '</ul>');\n  h = h.split(/\\n{2,}/).map(block => {\n    if (/^<(h2|h3|h4|ul|li|table)/.test(block.trim())) return block;\n    return '<p style=\"margin:8px 0;line-height:1.5;\">' + block.replace(/\\n/g, '<br>') + '</p>';\n  }).join('');\n  return h;\n};\n\nconst escalation = $json.cycle_count >= 3\n  ? '<div style=\"background:#fff4e5;border-left:4px solid #d97706;padding:10px 14px;margin-bottom:16px;font-size:13px;\"><strong>Note:</strong> This item reached the maximum of 3 review cycles and is being escalated for manual follow-up, regardless of the last decision.</div>'\n  : '';\n\n// FULL detailed report -> goes into the PDF attachment only\nconst pdfBodyHtml = '<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;color:#1a1a1a;\">' +\n  '<div style=\"background:#0b2545;color:#ffffff;padding:20px 24px;\">' +\n    '<div style=\"font-size:12px;letter-spacing:1px;opacity:0.8;\">NEXTWAVE SOFTWARE</div>' +\n    '<div style=\"font-size:20px;font-weight:bold;margin-top:4px;\">Release Readiness Notification</div>' +\n  '</div>' +\n  '<div style=\"padding:24px;border:1px solid #e2e8f0;border-top:none;\">' +\n    escalation +\n    '<p style=\"font-size:14px;\"><strong>Release Decision:</strong> ' + $json.data.Decision + '</p>' +\n    '<p style=\"font-size:14px;\"><strong>Technical Lead Comments:</strong><br>' + ($json.data.Comments || 'None provided') + '</p>' +\n    '<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:20px 0;\">' +\n    mdToHtml(raw) +\n  '</div>' +\n  '<div style=\"padding:14px 24px;font-size:11px;color:#667085;\">This is an automated notification from the NextWave Release Readiness system. This assessment is advisory only — the Technical Lead retains final release authority.</div>' +\n'</div>';\n\nconst pdfHtmlString = '<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>' + pdfBodyHtml + '</body></html>';\n\n// SHORT summary -> goes into the email body only\nconst shortSummary = $('Compliance & Recommendation Agent').item.json.output.summary || 'Please see the attached PDF for the full assessment.';\n\nconst emailHtmlString = '<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;color:#1a1a1a;\">' +\n  '<div style=\"background:#0b2545;color:#ffffff;padding:20px 24px;\">' +\n    '<div style=\"font-size:12px;letter-spacing:1px;opacity:0.8;\">NEXTWAVE SOFTWARE</div>' +\n    '<div style=\"font-size:20px;font-weight:bold;margin-top:4px;\">Release Readiness Notification</div>' +\n  '</div>' +\n  '<div style=\"padding:24px;border:1px solid #e2e8f0;border-top:none;\">' +\n    escalation +\n    '<p style=\"font-size:14px;\"><strong>Release Decision:</strong> ' + $json.data.Decision + '</p>' +\n    '<p style=\"font-size:14px;\"><strong>Technical Lead Comments:</strong><br>' + ($json.data.Comments || 'None provided') + '</p>' +\n    '<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:20px 0;\">' +\n    '<p style=\"font-size:14px;line-height:1.6;\">' + shortSummary + '</p>' +\n    '<p style=\"font-size:13px;color:#475569;margin-top:20px;\">📎 The full Release Readiness Report — including QA results, open defects, and risk assessment — is attached as a PDF to this email.</p>' +\n  '</div>' +\n  '<div style=\"padding:14px 24px;font-size:11px;color:#667085;\">This is an automated notification from the NextWave Release Readiness system. This assessment is advisory only — the Technical Lead retains final release authority.</div>' +\n'</div>';\n\nreturn [{ json: { html: emailHtmlString, pdfHtml: pdfHtmlString, decision: $json.data.Decision, comments: $json.data.Comments } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        160
+      ],
+      "id": "1fcef4f8-f8bc-442f-b965-22d5ff9f45d5",
+      "name": "finalHtmlString"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfshift.io/v3/convert/pdf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "YOUR_PDFSHIFT_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ source: $json.pdfHtml }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2176,
+        160
+      ],
+      "id": "58fd5745-e3c0-413a-992d-27f50b22cfe5",
+      "name": "HTTP Request"
+    }
+  ],
+  "connections": {
+    "Supervisor Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Supervisor Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Extract Release PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supervisor Agent": {
+      "main": [
+        [
+          {
+            "node": "Change & QA Evidence Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Data": {
+      "main": [
+        [
+          {
+            "node": "Supervisor Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Change & QA Evidence Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Defect & Risk Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Defect & Risk Agent": {
+      "main": [
+        [
+          {
+            "node": "Combine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine": {
+      "main": [
+        [
+          {
+            "node": "Compliance & Recommendation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Compliance & Recommendation Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compliance & Recommendation Agent": {
+      "main": [
+        [
+          {
+            "node": "Report Generation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Generation Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Count Cycles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Compliance & Recommendation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "finalHtmlString",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Cycle Counter": {
+      "main": [
+        [
+          {
+            "node": "Release Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count Cycles": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Change & QA Evidence Agent": {
+      "main": [
+        [
+          {
+            "node": "Combine",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Defect & Risk Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Release PDF": {
+      "main": [
+        [
+          {
+            "node": "Data Extraction Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Extraction Agent": {
+      "main": [
+        [
+          {
+            "node": "Reset Cycle Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Extraction Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Data Extraction Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Data Extraction Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Supervisor Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Change & QA Evidence Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Defect & Risk Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Report Generation Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Compliance & Recommendation Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "finalHtmlString": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Final Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
